@@ -142,10 +142,7 @@ if __name__ == "__main__":
     images = images[0:9]
     print(images)
     bs = 1
-    from .text_eval import TextEvaluator
-from .text_eval_scripts import text_eval_main
-from . import rrc_evaluation_funcss,list):
-                continue 
+    
             
             scores = scores_list[k]
              
