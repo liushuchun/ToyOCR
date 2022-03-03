@@ -1,4 +1,6 @@
 import copy
+from data.transforms.make_shrink_border import MakeShrinkMap
+from data.transforms.make_border_map import MakeBorderMap
 import logging
 
 import numpy as np
@@ -10,9 +12,7 @@ import cv2
 
 from .transforms.arguement import arguementation
 
-
 from . import transforms as T
-
 """
 This file contains the default mapping that's applied to "dataset dicts".
 """
@@ -88,19 +88,26 @@ class DatasetMapper:
     2. Applies cropping/geometric transforms to the image and annotations
     3. Prepare data and annotations to Tensor and :class:`Instances`
     """
-
     def __init__(self, cfg, is_train=True):
 
         self.keep_size_and_crop = False
+        self.db_keep_size_and_crop=False 
+        self.text_det = False
 
         if cfg.INPUT.CROP.ENABLED and is_train and cfg.INPUT.CROP.TYPE != "crop_keep":
-            self.crop_gen = T.RandomCrop(
-                cfg.INPUT.CROP.TYPE, cfg.INPUT.CROP.SIZE)
-            logging.getLogger('detectron2').info(
-                "CropGen used in training: " + str(self.crop_gen))
+            self.crop_gen = T.RandomCrop(cfg.INPUT.CROP.TYPE,
+                                         cfg.INPUT.CROP.SIZE)
+            logging.getLogger('detectron2').info("CropGen used in training: " +
+                                                 str(self.crop_gen))
         elif cfg.INPUT.CROP.ENABLED and is_train and cfg.INPUT.CROP.TYPE == "crop_keep":
             self.keep_size_and_crop = True
             self.data_croper = T.RandomCropTransform()
+            
+        elif cfg.INPUT.CROP.ENABLED and is_train and cfg.INPUT.CROP.TYPE == "db_crop_keep":
+            self.db_keep_size_and_crop = True 
+            self.shrink_map_trans = MakeShrinkMap()
+            self.border_map_trans=MakeBorderMap()
+            
         else:
             self.crop_gen = None
 
@@ -109,10 +116,10 @@ class DatasetMapper:
         self.tfm_gens = build_transform_gen(cfg, is_train)
 
         # fmt: off
-        self.img_format     = cfg.INPUT.FORMAT
-        self.mask_on        = cfg.MODEL.MASK_ON
-        self.mask_format    = cfg.INPUT.MASK_FORMAT
-        self.keypoint_on    = cfg.MODEL.KEYPOINT_ON
+        self.img_format = cfg.INPUT.FORMAT
+        self.mask_on = cfg.MODEL.MASK_ON
+        self.mask_format = cfg.INPUT.MASK_FORMAT
+        self.keypoint_on = cfg.MODEL.KEYPOINT_ON
         self.load_proposals = cfg.MODEL.LOAD_PROPOSALS
         # fmt: on
         if self.keypoint_on and is_train:
@@ -124,11 +131,9 @@ class DatasetMapper:
 
         if self.load_proposals:
             self.min_box_side_len = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
-            self.proposal_topk = (
-                cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TRAIN
-                if is_train
-                else cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST
-            )
+            self.proposal_topk = (cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TRAIN
+                                  if is_train else
+                                  cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST)
         self.is_train = is_train
         self.BOX_MINSIZE = 1e-5
         self.imgaug_prob = 1.0
@@ -148,14 +153,15 @@ class DatasetMapper:
         dataset_dict = copy.deepcopy(
             dataset_dict)  # it will be modified by code below
         # USER: Write your own image loading if it's not from a file
-        image = utils.read_image(
-            dataset_dict["file_name"], format=self.img_format)
+        image = utils.read_image(dataset_dict["file_name"],
+                                 format=self.img_format)
         # cv2.imshow("hello",image)
         # cv2.waitKey(2)
         utils.check_image_size(dataset_dict, image)
 
         origin_shape = image.shape[:2]
-
+        
+        
         if self.keep_size_and_crop:
             ignore_polys = [np.array(obj["poly"]).reshape(-1, 2) for obj in dataset_dict[
                 "annotations"] if obj["ignore"] == 1]
@@ -194,12 +200,42 @@ class DatasetMapper:
             return dataset_dict
 
 
+        if self.db_keep_size_and_crop:
+            
+            data_dict=self.data_croper(dataset_dict)
+
+            polys = [
+                np.array(obj["poly"]).reshape(-1, 2)
+                for obj in dataset_dict["annotations"] if obj["ignore"] == 0
+            ]
+
+                
+            text_polys= [
+                np.array(obj["poly"]).reshape(-1, 2) for obj in dataset_dict["annotations"]]
+            ignore_tags= [obj["ignore"] for obj in dataset_dict["annotations"]]
+
+            data = dict(image=image, text_polys=text_polys, ignore_tags=ignore_tags)
+            
+            data = self.shrink_map_trans(data)
+            data = self.border_map_trans(data)
+            
+
+            image, segm_gt, mask = self.data_croper(image, polys, data["gt"],
+                                                    data["mask"])
+
+            dataset_dict["sem_seg"] = torch.as_tensor(segm_gt)
+
+            dataset_dict["image"] = torch.as_tensor(
+                image.transpose(2, 0, 1).astype("float32"))
+            dataset_dict["mask"] = torch.as_tensor(mask)
+            return dataset_dict
+
         if "annotations" not in dataset_dict:
 
             print("with not crop")
             image, transforms = T.apply_transform_gens(
-                ([self.crop_gen] if self.crop_gen else []) + self.tfm_gens, image
-            )
+                ([self.crop_gen] if self.crop_gen else []) + self.tfm_gens,
+                image)
         else:
             # Crop around an instance if there are instances in the image.
             # USER: Remove if you don't use cropping
@@ -218,7 +254,7 @@ class DatasetMapper:
         image_shape = image.shape[:2]  # h, w
 
         # apply imgaug
-        if self.is_train and self.imgaug_prob < 1.0 and cfg.MODEL.META_ARCHITECTURE == "CenterNet":
+        if self.is_train and self.imgaug_prob < 1.0 and self.cfg.MODEL.META_ARCHITECTURE == "CenterNet":
             image = arguementation(image, self.imgaug_prob)
 
         # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
@@ -230,9 +266,9 @@ class DatasetMapper:
 
         # USER: Remove if you don't use pre-computed proposals.
         if self.load_proposals:
-            utils.transform_proposals(
-                dataset_dict, image_shape, transforms, self.min_box_side_len, self.proposal_topk
-            )
+            utils.transform_proposals(dataset_dict, image_shape, transforms,
+                                      self.min_box_side_len,
+                                      self.proposal_topk)
 
         if not self.is_train and not self.eval_with_gt:
             dataset_dict.pop("annotations", None)
@@ -247,20 +283,23 @@ class DatasetMapper:
                 if not self.keypoint_on:
                     anno.pop("keypoints", None)
 
-            ignore_polys = [obj["poly"] for obj in dataset_dict[
-                "annotations"] if obj["ignore"] == 1]
+            ignore_polys = [
+                obj["poly"] for obj in dataset_dict["annotations"]
+                if obj["ignore"] == 1
+            ]
             # USER: Implement additional transformations if you have other types of data
             annos = [
                 utils.transform_instance_annotations(
-                    obj, transforms, image_shape, keypoint_hflip_indices=self.keypoint_hflip_indices
-                )
+                    obj,
+                    transforms,
+                    image_shape,
+                    keypoint_hflip_indices=self.keypoint_hflip_indices)
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("ignore", 0) == 0
             ]
 
             instances = utils.annotations_to_instances(
-                annos, image_shape, mask_format=self.mask_format
-            )
+                annos, image_shape, mask_format=self.mask_format)
             # Create a tight bounding box from masks, useful when image is cropped
             if self.crop_gen and instances.has("gt_masks"):
                 instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
@@ -281,7 +320,7 @@ class DatasetMapper:
 
             segm_gt = transforms.apply_segmentation(segm_gt)
 
-            segm_gt = torch.as_tensor(segm_gt.astype("float32")/255.)
+            segm_gt = torch.as_tensor(segm_gt.astype("float32") / 255.)
 
             dataset_dict["sem_seg"] = segm_gt
 

@@ -2,6 +2,11 @@ import numpy as np
 import cv2
 
 
+
+__all__ = [
+    "MakeShrinkMap"
+]
+
 def shrink_polygon_py(polygon, shrink_ratio):
     """Shrink the poly with the shrink ratio
     Args:
@@ -44,7 +49,7 @@ def shrink_polygon_pyclipper(polygon, shrink_ratio):
     return shrinked
 
 
-class MakeShrinkMap():
+class MakeShrinkMap:
     r'''
     Making binary mask from detection data with ICDAR format.
     Typically following the process of class `MakeICDARData`.

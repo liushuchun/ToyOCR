@@ -11,22 +11,22 @@ from detectron2.structures import Boxes, ImageList, Instances
 from ..backbone import build_backbone
 from ..losses import reg_l1_loss, modified_focal_loss, ignore_unlabel_focal_loss, mse_loss
 
-from ..heads import ToyDetHead
+from ..heads import DBNetHead
 from ..necks import FPNDeconv
-from ..decoders import toydet_decode
+from ..decoders import dbnet_decode
 from ..losses import BalanceL1Loss, mse_loss
 
 from ..utils import batch_padding, mask_up_dim
 from torch.nn import functional as F
 
-__all__ = ["ToyDet"]
+__all__ = ["DBNet"]
 
 DEBUG = True  
 count = 0
 
 
 @META_ARCH_REGISTRY.register()
-class ToyDet(nn.Module):
+class DBNet(nn.Module):
     """
     Implement ToyDet
     """
@@ -44,7 +44,7 @@ class ToyDet(nn.Module):
         # fmt: on
         self.backbone = build_backbone(cfg)
         self.upsample = FPNDeconv(cfg)  # FPNDeconv(cfg)
-        self.head = ToyDetHead(cfg)
+        self.head = DBNetHead(cfg)
 
         self.mean, self.std = cfg.MODEL.PIXEL_MEAN, cfg.MODEL.PIXEL_STD
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(
@@ -53,7 +53,7 @@ class ToyDet(nn.Module):
             3, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
 
-        self.decoder = toydet_decode.ToyDetDecoder()
+        self.decoder = dbnet_decode.DBDecoder()
 
         self.to(self.device)
 
@@ -122,6 +122,7 @@ class ToyDet(nn.Module):
         up_fmap = self.upsample(features)
 
         preds = self.head(up_fmap)
+        
 
         if DEBUG and count % 10 == 0:
 
@@ -150,9 +151,9 @@ class ToyDet(nn.Module):
             cv2.imwrite("show.jpg", show)
             
 
-        loss_segm = self.head.losses(preds, gt_segm, mask)
+        loss_dict = self.head.losses(preds, gt_segm, mask)
 
-        return loss_segm
+        return loss_dict["loss"]
 
     @torch.no_grad()
     def inference(self, images, batched_inputs, K=100):
@@ -233,5 +234,5 @@ class ToyDet(nn.Module):
 
 
 def build_toydet_model(cfg):
-    model = ToyDet(cfg)
+    model = DBNet(cfg)
     return model

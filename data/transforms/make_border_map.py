@@ -5,8 +5,11 @@ from shapely.geometry import Polygon
 import pyclipper
 
 
+__all__ = [
+    "MakeBorderMap"
+]
 
-class MakeBorderMap():
+class MakeBorderMap:
     
 
     def __init__(self,shrink_ratio=0.4,thresh_min=0.3,thresh_max=0.7,cmd={}, *args, **kwargs):

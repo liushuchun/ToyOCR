@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from ..losses import BalanceL1Loss
+from ..losses import OHEMLoss
 
 
 class SingleHead(nn.Module):
@@ -11,11 +12,12 @@ class SingleHead(nn.Module):
     The single head used in different modules
 
     """
-
     def __init__(self, in_channel, out_channel, bias_fill=False, bias_value=0):
         super(SingleHead, self).__init__()
-        self.feat_conv = nn.Conv2d(
-            in_channel, in_channel, kernel_size=3, padding=1)
+        self.feat_conv = nn.Conv2d(in_channel,
+                                   in_channel,
+                                   kernel_size=3,
+                                   padding=1)
         self.relu = nn.ReLU()
         self.out_conv = nn.Conv2d(in_channel, out_channel, kernel_size=1)
         if bias_fill:
@@ -44,24 +46,31 @@ class ToyDetHead(nn.Module):
     The head used in ToyDet for object classification and box regression.
     It has three subnet, with a common structure but separate parameters.
     """
-
-    def __init__(self, cfg, ignore_value=-1, inner_channels=256, bias=False, out_channel=1):
+    def __init__(self,
+                 cfg,
+                 ignore_value=-1,
+                 inner_channels=256,
+                 bias=False,
+                 out_channel=1):
         super(ToyDetHead, self).__init__()
 
         self.inner_channels = inner_channels
 
         self.cls = nn.Sequential(
-            nn.Conv2d(self.inner_channels, self.inner_channels //
-                      4, 3, padding=1, bias=bias),
-            nn.BatchNorm2d(self.inner_channels//4),
+            nn.Conv2d(self.inner_channels,
+                      self.inner_channels // 4,
+                      3,
+                      padding=1,
+                      bias=bias), nn.BatchNorm2d(self.inner_channels // 4),
             nn.ReLU(inplace=True),
-            nn.Conv2d(self.inner_channels//4, self.inner_channels //
-                      16, 3, padding=1, bias=bias),
-            nn.BatchNorm2d(self.inner_channels//16),
+            nn.Conv2d(self.inner_channels // 4,
+                      self.inner_channels // 16,
+                      3,
+                      padding=1,
+                      bias=bias), nn.BatchNorm2d(self.inner_channels // 16),
             nn.ReLU(inplace=True),
-            nn.Conv2d(self.inner_channels//16, out_channel, kernel_size=1),
-            nn.BatchNorm2d(out_channel),
-            nn.Sigmoid())
+            nn.Conv2d(self.inner_channels // 16, out_channel, kernel_size=1),
+            nn.BatchNorm2d(out_channel), nn.Sigmoid())
 
         self.cls.apply(self.weights_init)
 
@@ -73,6 +82,7 @@ class ToyDetHead(nn.Module):
         self.loss_func = nn.MSELoss(reduce='none')
         self.balanced_mse = BalanceL1Loss()
         self.loss = nn.MSELoss()
+        self.ohem_loss = OHEMLoss()
 
     def weights_init(self, m):
         classname = m.__class__.__name__
@@ -93,11 +103,15 @@ class ToyDetHead(nn.Module):
 
         predictions = predictions.float()
 
-        predictions = F.upsample(
-             input=predictions, size=dst_shape, mode='bilinear')
+        predictions = F.upsample(input=predictions,
+                                 size=dst_shape,
+                                 mode='bilinear')
 
         #predictions = predictions.squeeze(1)
-        loss,_=self.balanced_mse(predictions,targets,masks)
+        loss, _ = self.balanced_mse(predictions, targets, masks)
+        # loss_mse=self.loss(predictions,targets)
+
+        #loss =self.ohem_loss( predictions,targets,masks)
         # print(predictions.shape,targets.shape)
         #loss =self.loss(predictions*masks,targets*masks)
         # print(predictions.shape, targets.shape, masks.shape)

@@ -2,7 +2,7 @@ MODEL:
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   #WEIGHTS: 'exp_results/final/model_final.pth' #'exp_results/final/model_final.pth' #'exp_results/layout_exp_R50_SGD/model_final.pth'
 
-  META_ARCHITECTURE: "ToyDet"
+  META_ARCHITECTURE: "DBNet"
   BN_TYPE: "BN"
   BACKBONE:
     NAME: "build_resnet"
@@ -52,7 +52,7 @@ INPUT:
   
   CROP:
     ENABLED: True 
-    TYPE: 'crop_keep' #"crop_keep"
+    TYPE: 'db_crop_keep' #"crop_keep"
     SIZE: [0.6, 0.6]
 
 OUTPUT_DIR: "exp_results/us"

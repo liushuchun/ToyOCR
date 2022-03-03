@@ -109,62 +109,62 @@ def build_model(cfg):
     return model
 
 
-if __name__ == "__main__":
-    # cfg
-    cfg = get_cfg()
-    add_textnet_config(cfg)
-    cfg.merge_from_file("yamls/text_detection/toydet_text.yaml")
+# if __name__ == "__main__":
+#     # cfg
+#     cfg = get_cfg()
+#     add_textnet_config(cfg)
+#     cfg.merge_from_file("yamls/text_detection/toydet_text.yaml")
 
-    # model
-    model = build_model(cfg)
-    DetectionCheckpointer(model).load(
-        "exp_results/toydet_exp_R50/model_final.pth")
-    model.eval()
+#     # model
+#     model = build_model(cfg)
+#     DetectionCheckpointer(model).load(
+#         "exp_results/toydet_exp_R50/model_final.pth")
+#     model.eval()
 
-    metadata = MetadataCatalog.get(
-        cfg.DATASETS.TEST[0] if len(cfg.DATASETS.TEST) else "__unused"
-    )
+#     metadata = MetadataCatalog.get(
+#         cfg.DATASETS.TEST[0] if len(cfg.DATASETS.TEST) else "__unused"
+#     )
 
-    class_names = ('text')
-    # txt
-    txt = open('results.txt', 'w')
+#     class_names = ('text')
+#     # txt
+#     txt = open('results.txt', 'w')
 
-    out_dir = 'exp_results/toydet_exp_R50/results/'
-    # os.mkdir(out_dir)
-    thickness = 1
-    bbox_color = (0, 255, 0)
-    text_color = bbox_color
-    font_scale = 0.5
-    # images
-    #lines = open('datasets/bjz_multicameras_20200615/txts/bjz_val_multicameras_20200615.txt').readlines()
-    root = 'datasets/icdar/images/'
-    images = [root + i for i in sorted(os.listdir(root))]
-    images = images[0:9]
-    print(images)
-    bs = 1
+#     out_dir = 'exp_results/toydet_exp_R50/results/'
+#     # os.mkdir(out_dir)
+#     thickness = 1
+#     bbox_color = (0, 255, 0)
+#     text_color = bbox_color
+#     font_scale = 0.5
+#     # images
+#     #lines = open('datasets/bjz_multicameras_20200615/txts/bjz_val_multicameras_20200615.txt').readlines()
+#     root = 'datasets/icdar/images/'
+#     images = [root + i for i in sorted(os.listdir(root))]
+#     images = images[0:9]
+#     print(images)
+#     bs = 1
     
             
-            scores = scores_list[k]
-             
-            H, W, C = images_rgb[k].shape
-            img = images_rgb[k][:, :, ::-1]
-            img_name = img_names[k]
-            outstr=""
-            for box,score in zip(boxes, scores):
-                
-                box=box.astype(np.int32)
-                print(box.shape)
-                
-                for i in range(len(box)):
-                    outstr = outstr + str(int(box[i][0])) +','+str(int(box[i][1])) +','
+#     scores = scores_list[k]
+        
+#     H, W, C = images_rgb[k].shape
+#     img = images_rgb[k][:, :, ::-1]
+#     img_name = img_names[k]
+#     outstr=""
+#     for box,score in zip(boxes, scores):
+        
+#         box=box.astype(np.int32)
+#         print(box.shape)
+        
+#         for i in range(len(box)):
+#             outstr = outstr + str(int(box[i][0])) +','+str(int(box[i][1])) +','
 
-                #box = box.astype(np.int32).reshape((-1, 1, 2))
-                
-                
-                cv2.polylines(img, [box], True, color=(255, 255, 155), thickness=2)
-                # cv2.putText(img, "text", (box[0]),
-                #             cv2.FONT_HERSHEY_COMPLEX, font_scale, text_color)
-             
-            cv2.imshow("hello",cv2.resize(img,(int(W/2),int(H/2))))
-            cv2.waitKey(0)
-            # cv2.imwrite(os.path.join(out_dir, img_name), img)
+#         #box = box.astype(np.int32).reshape((-1, 1, 2))
+        
+        
+#         cv2.polylines(img, [box], True, color=(255, 255, 155), thickness=2)
+#         # cv2.putText(img, "text", (box[0]),
+#         #             cv2.FONT_HERSHEY_COMPLEX, font_scale, text_color)
+        
+#     cv2.imshow("hello",cv2.resize(img,(int(W/2),int(H/2))))
+#     cv2.waitKey(0)
+#     # cv2.imwrite(os.path.join(out_dir, img_name), img)
